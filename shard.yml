@@ -1,0 +1,9 @@
+name: aws-sdk
+version: 0.0.1
+
+authors:
+  - Gabriel Silveira <gabriel.silveira@poli.ufrj.br>
+
+crystal: ">= 1.11.2"
+
+license: MIT
