@@ -1,0 +1,58 @@
+struct AWS::<%= module_name %>::<%= shape_name %>
+  alias UNION = ::Union(<%= members.each.join { |member, _, _| "#{member}, " } %>Unknown)
+
+<% members.each do |member, type, tag, converter| %>
+  class <%= member %>
+    include Core::TaggedUnion::Member(<%= shape_name %>, <%= type %>)
+
+    def self.new(pull : ::JSON::PullParser)
+      new(<%= converter.nil? ? "#{type}.new(pull)" : "#{converter}.from_json(pull)" %>)
+    end
+
+    def to_json(json : ::JSON::Builder)
+      <%= converter.nil? ? "value.to_json(json)" : "#{converter}.to_json(value, json)" %>
+    end
+  end
+<% end -%>
+
+  class Unknown
+    include Core::TaggedUnion::UnknownMember
+  end
+
+  getter value
+
+  def initialize(@value : UNION)
+  end
+
+  def self.new(pull : ::JSON::PullParser)
+    value = nil
+    pull.read_object do |union_tag|
+      value = case union_tag
+              <%- members.each do |member, type, tag| -%>
+              when "<%= tag %>"    then <%= member %>.new(pull)
+              <%- end -%>
+              else Unknown.new(pull)
+              end
+    end
+    new value.not_nil!
+  end
+
+  def to_json(json : ::JSON::Builder)
+    json.object do
+      field = case value
+              <%- members.each do |member, type, tag| -%>
+              in <%= member %>    then "<%= tag %>"
+              <%- end -%>
+              in Unknown      then raise ArgumentError.new("Cannot serialize 'Unknown'")
+              end
+
+      json.field(field, value)
+    end
+  end
+
+  def resolve
+    unresolved_value = @value
+    raise Core::TaggedUnion::UnknownMemberResolveAttemptException.new if unresolved_value.is_a? Unknown
+    unresolved_value.value
+  end
+end

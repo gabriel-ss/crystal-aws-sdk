@@ -1,0 +1,21 @@
+require "../core/clients/json"
+
+module AWS::<%= module_name %>
+  class Client
+    include JSONClient
+
+    def initialize(config = Core::Config.new)
+      super("<%= target_prefix %>", "<%= endpoint_prefix %>", "<%= json_version %>", config)
+    end
+
+    <%- operations.each do |operation_name, operation| %>
+    def <%= operation_name.underscore %>(input : <%= operation.input_type %>) : <%= operation.return_type %>
+      exec("<%= operation_name %>", input.to_json) do |response|
+        body = Log.level <= ::Log::Severity::Debug ? response.body_io.gets_to_end : response.body_io
+        Log.debug { "Operation \"<%= operation_name %>\" responded with:\n#{body}" }
+        return <%= operation.return_expression %>
+      end
+    end
+    <%- end -%>
+  end
+end
