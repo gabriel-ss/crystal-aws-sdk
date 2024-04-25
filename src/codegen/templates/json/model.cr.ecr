@@ -1,0 +1,16 @@
+module AWS::<%= module_name %>
+  class <%= shape_name %>
+    include ::JSON::Serializable
+<% shape_members.each do |shape| %>
+    @[::JSON::Field(key: "<%= shape.name %>"<%= ", ignore_serialize: true" if !shape.json_serializable? %><% unless shape.converter.nil? %>, converter: <%= shape.converter %><% end %>)]
+    property <%= shape.property_name %> : <%= shape.rendered_type %><%= "?" unless shape.is_required? %>
+<% end %>
+
+    def initialize(
+    <%- shape_members.each do |shape| -%>
+      @<%= shape.property_name %> : <%= shape.rendered_type %><%= "? = nil" unless shape.is_required? %>,
+    <%- end -%>
+    )
+    end
+  end
+end

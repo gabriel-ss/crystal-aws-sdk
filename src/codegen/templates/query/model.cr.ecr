@@ -1,0 +1,24 @@
+module AWS::<%= module_name %>
+  class <%= shape_name %>
+    include Core::XML::Serializable
+<% shape_members.each do |shape| %>
+    @[Core::XML::Field(key: "<%= shape.name %>"<%= ", ignore_serialize: true" if !shape.json_serializable? %><% unless shape.converter.nil? %>, converter: <%= shape.converter %><% end %>)]
+    property <%= shape.property_name %> : <%= shape.rendered_type %><%= "?" unless shape.is_required? %>
+<% end %>
+
+    def initialize(
+    <%- shape_members.each do |shape| -%>
+      @<%= shape.property_name %> : <%= shape.rendered_type %><%= "? = nil" unless shape.is_required? %>,
+    <%- end -%>
+    )
+    end
+
+  end
+end
+
+def AWS::Core::QueryEncoder.encode(value : AWS::<%= module_name %>::<%= shape_name %>, params : URI::Params, key_path : Array(String))
+  <%- shape_members.each do |shape| -%>
+  __<%= shape.property_name %> = value.<%= shape.property_name %>
+  QueryEncoder.encode(__<%= shape.property_name %>.to_s, params, [*key_path, "<%= shape.name %>"])<%= " unless __#{shape.property_name}.nil?" unless shape.is_required? %>
+  <%- end -%>
+end
