@@ -1,0 +1,46 @@
+module AWS::<%= module_name %>
+  class <%= shape_name %>
+    include ::JSON::Serializable
+<% shape_members.each do |shape| %>
+    @[::JSON::Field(key: "<%= shape.name %>"<%= ", ignore_serialize: true" if !shape.json_serializable? %><% unless shape.converter.nil? %>, converter: <%= shape.converter %><% end %>)]
+    property <%= shape.property_name %> : <%= shape.rendered_type %><%= "?" unless shape.is_required? %>
+<% end %>
+
+    def initialize(
+    <%- shape_members.each do |shape| -%>
+      @<%= shape.property_name %> : <%= shape.rendered_type %><%= "? = nil" unless shape.is_required? %>,
+    <%- end -%>
+    )
+    end
+
+
+    <%- if has_header_params? -%>
+    <%= shape_members.select(&.http_header.!= nil) %>
+    def make_headers
+      headers = HTTP::Headers.new
+      <%- shape_members.select(&.http_header.!= nil).each do |shape| -%>
+      __<%= shape.property_name %> = value.<%= shape.property_name %>
+      headers.add("<%= shape.http_header.not_nil! %>", __<%= shape.property_name %>.to_s)<%= " unless __#{shape.property_name}.nil?" unless shape.is_required? %>
+      <%- end -%>
+      headers
+    end
+    <%- else -%>
+    def make_headers
+    end
+    <%- end -%>
+
+    <%- if has_query_params? -%>
+    def make_params
+      params = URI::Params.new
+      <%- shape_members.select(&.http_query_param.!= nil).each do |shape| -%>
+      __<%= shape.property_name %> = value.<%= shape.property_name %>
+      params.add("<%= shape.http_query_param.not_nil! %>", __<%= shape.property_name %>.to_s)<%= " unless __#{shape.property_name}.nil?" unless shape.is_required? %>
+      <%- end -%>
+      params
+    end
+    <%- else -%>
+    def make_params
+    end
+    <%- end -%>
+  end
+end
