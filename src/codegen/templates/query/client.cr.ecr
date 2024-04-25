@@ -1,0 +1,26 @@
+require "../core/clients/query"
+require "../core/codecs/query"
+require "../core/codecs/xml"
+
+module AWS::<%= module_name %>
+  class Client
+    include QueryClient
+
+    def initialize(config = Core::Config.new)
+      super("<%= endpoint_prefix %>", "<%= service_version %>", config)
+    end
+
+    <%- operations.each do |operation_name, operation| %>
+    def <%= operation_name.underscore %>(input : <%= operation.input_type %>) : <%= operation.return_type %>
+      params = URI::Params.new
+      AWS::Core::QueryEncoder.encode(input, params, %w())
+      exec("<%= operation_name %>", params) do |response|
+        body = Log.level <= ::Log::Severity::Debug ? response.body_io.gets_to_end : response.body_io
+        Log.debug { "Operation \"<%= operation_name %>\" responded with:\n#{body}" }
+        reader = ::XML::Reader.new body
+        parse_response reader, <%= operation.return_type %>, "<%= operation.return_type.sub(/Response$/, "Result") %>"
+      end
+    end
+    <%- end -%>
+  end
+end

@@ -1,0 +1,9 @@
+require "../core/*"
+require "./client"
+require "./*"
+
+module AWS::<%= module_name %>
+  Log = AWS::Log.for(self)
+
+  VERSION     = "<%= module_version %>"
+end

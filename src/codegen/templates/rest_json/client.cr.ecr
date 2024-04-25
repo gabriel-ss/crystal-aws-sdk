@@ -1,0 +1,23 @@
+require "../core/clients/rest_json"
+
+module AWS::<%= module_name %>
+  class Client
+    include RestJSONClient
+
+    def initialize(config = Core::Config.new)
+      super("<%= endpoint_prefix %>", config)
+    end
+
+    <%- operations.each do |operation_name, operation| %>
+    def <%= operation_name.underscore %>(input : <%= operation.input_type %>) : <%= operation.return_type %>
+      path = <%= operation.path_expression %>
+      exec("<%= operation.http_method %>", path, input.make_headers, <%= operation.body_expression %>, input.make_params) do |response|
+        body = Log.level <= ::Log::Severity::Debug ? response.body_io.gets_to_end : response.body_io
+        Log.debug { "Operation \"<%= operation_name %>\" responded with:\n#{body}" }
+        return <%= operation.return_expression %>
+      end
+    end
+    <%- end -%>
+  end
+end
+

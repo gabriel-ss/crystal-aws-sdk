@@ -1,0 +1,47 @@
+module AWS::<%= module_name %>
+  enum <%= shape_name %>
+<% members.each do |member, value| -%>
+    <%= member %>
+<% end -%>
+
+    def to_s(io : IO)
+      io << case self
+            <%- members.each do |member, value| -%>
+            in <%= shape_name %>::<%= member %>    then "<%= value %>"
+            <%- end -%>
+            end
+    end
+
+    def to_s : String
+      String.build { |io| to_s(io) }
+    end
+
+    def to_json_object_key : String
+      to_s
+    end
+
+    def self.parse?(string : String)
+      case string
+      <%- members.each do |member, string| -%>
+      when "<%= string %>"    then <%= shape_name %>::<%= member %>
+      <%- end -%>
+      else nil
+      end
+    end
+  end
+
+  module Converters::<%= shape_name %>
+    def self.from_json(pull : ::JSON::PullParser)
+      value = pull.read_string
+      AWS::<%= module_name %>::<%= shape_name %>.parse?(value) || value
+    end
+
+    def self.to_json(input : AWS::<%= module_name %>::<%= shape_name %> | String, json : ::JSON::Builder)
+      value = case input
+              in AWS::<%= module_name %>::<%= shape_name %>  then input.to_s
+              in String                                      then input
+              end
+      json.string(value)
+    end
+  end
+end
