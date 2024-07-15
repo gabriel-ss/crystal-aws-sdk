@@ -4,9 +4,12 @@ require "awscr-signer"
 require "uri"
 require "uuid"
 require "../converters/json"
+require "./pooled_client"
 
 private module AWS::JSONClient
   alias Signer = Awscr::Signer::Signers::V4
+
+  include PooledClient
 
   def initialize(
     @target_prefix : String,
@@ -14,18 +17,12 @@ private module AWS::JSONClient
     @json_version : String,
     @config = Config.new
   )
-    @base_uri = URI.parse(config.endpoint_url || "https://#{endpoint_prefix}.#{config.aws_region}.amazonaws.com")
+    @connection_pool = create_connection_pool(@endpoint_prefix, @config)
   end
 
   def exec(command : String, body : HTTP::Client::BodyType = nil, & : HTTP::Client::Response ->)
     request = HTTP::Request.new("POST", "/", make_headers(command), body)
-
-    credentials = @config.credentials
-    signer = Signer.new(@endpoint_prefix, @config.aws_region, credentials.access_key_id, credentials.secret_access_key, credentials.session_token)
-
-    client = HTTP::Client.new(@base_uri)
-    client.before_request { |request| signer.sign(request) }
-    client.exec(request) { |response| yield response }
+    exec_with_client(request) { |response| yield response }
   end
 
   private def make_headers(command)

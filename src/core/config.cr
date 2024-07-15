@@ -10,7 +10,7 @@ module AWS
   Log = ::Log.for(self)
 
   struct Config
-    getter aws_region : String, endpoint_url : String?
+    getter aws_region : String, endpoint_url : String?, connect_timeout, read_timeout, max_connection_pool_size, max_idle_connection_pool_size, tls_context
 
     @credentials_provider : Auth::CredentialProvider
 
@@ -54,7 +54,14 @@ module AWS
       endpoint_url : String? = nil,
       aws_access_key_id : String? = nil,
       aws_secret_access_key : String? = nil,
-      aws_session_token : String? = nil
+      aws_session_token : String? = nil,
+      @connect_timeout : Time::Span? = 60.seconds,
+      @read_timeout : Time::Span? = 60.seconds,
+      # maximum amount of connections in the pool (Idle + InUse). 0 means no maximum.
+      @max_connection_pool_size : Int32 = 10,
+      # maximum amount of idle connections in the pool
+      @max_idle_connection_pool_size : Int32 = 10,
+      @tls_context : HTTP::Client::TLSContext = nil
     )
       @aws_region = aws_region || self.class.resolve_region(profile_name)
       @endpoint_url = endpoint_url
