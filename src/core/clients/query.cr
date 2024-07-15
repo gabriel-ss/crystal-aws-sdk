@@ -3,16 +3,19 @@ require "http/request"
 require "awscr-signer"
 require "uri"
 require "uuid"
+require "./pooled_client"
 
 private module AWS::QueryClient
   alias Signer = Awscr::Signer::Signers::V4
+
+  include PooledClient
 
   def initialize(
     @endpoint_prefix : String,
     @service_version : String,
     @config = Config.new
   )
-    @base_uri = URI.parse(config.endpoint_url || "https://#{endpoint_prefix}.#{config.aws_region}.amazonaws.com")
+    @connection_pool = create_connection_pool(@endpoint_prefix, @config)
   end
 
   HEADERS = HTTP::Headers{"Content-Type" => "application/x-www-form-urlencoded"}
@@ -21,13 +24,7 @@ private module AWS::QueryClient
     params["Action"] = command
     params["Version"] = @service_version
     request = HTTP::Request.new("POST", "/", HEADERS, params.to_s)
-
-    credentials = @config.credentials
-    signer = Signer.new(@endpoint_prefix, @config.aws_region, credentials.access_key_id, credentials.secret_access_key, credentials.session_token)
-
-    client = HTTP::Client.new(@base_uri)
-    client.before_request { |request| signer.sign(request) }
-    client.exec(request) { |response| yield response }
+    exec_with_client(request) { |response| yield response }
   end
 
   def parse_response(reader : ::XML::Reader, result_type : T.class, result_node : String) : T forall T

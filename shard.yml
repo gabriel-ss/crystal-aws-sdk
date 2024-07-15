@@ -9,6 +9,8 @@ crystal: ">= 1.11.2"
 dependencies:
   awscr-signer:
     github: taylorfinnell/awscr-signer
+  db:
+    github: crystal-lang/crystal-db
 
 development_dependencies:
   ameba:
