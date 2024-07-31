@@ -1,8 +1,12 @@
 module AWS::<%= module_name %>
-  class <%= shape_name %>
+  class <%= shape_name %><% if error? %> < Error<% else %>
     include Core::XML::Serializable
+    <% end -%>
+
 <% shape_members.each do |shape| %>
+    <%- unless error? -%>
     @[Core::XML::Field(key: "<%= shape.name %>"<%= ", ignore_serialize: true" if !shape.json_serializable? %><% unless shape.converter.nil? %>, converter: <%= shape.converter %><% end %>)]
+    <%- end -%>
     property <%= shape.property_name %> : <%= shape.rendered_type %><%= "?" unless shape.is_required? %>
 <% end %>
 
@@ -13,6 +17,49 @@ module AWS::<%= module_name %>
     )
     end
 
+  <% if error? %>
+    def self.from_xml(reader : ::XML::Reader)
+      <% shape_members.each do |shape| %>
+        __<%= shape.property_name %> = uninitialized ::Union(<%= shape.rendered_type %>)
+        __<%= shape.property_name %>_found = false
+      <% end %>
+
+        outer_depth = reader.depth
+        reader.read
+
+        until reader.depth == outer_depth
+          next reader.read unless reader.node_type.element?
+
+          key = reader.name
+          case key
+          <% shape_members.each do |shape| %>
+            when "<%= shape.name %>"
+              begin
+                __<%= shape.property_name %> = <%- unless shape.converter.nil? -%>
+                    <%= shape.converter %>.from_xml(reader)
+                  <%- else -%>
+                    ::Union(<%= shape.rendered_type %>).from_aws_sdk_xml_input(reader)
+                  <%- end -%>
+                __<%= shape.property_name %>_found = true
+              end
+          <%- end %>
+          end
+        end
+        reader.read
+
+        <%- shape_members.each do |shape| -%>
+        <%- if shape.is_required? -%>
+        raise "Missing XML element: <%= shape.name %>" unless __<%= shape.property_name %>_found
+        <%- end -%>
+        <%- end -%>
+
+      <%= shape_name %>.new(
+        <%- shape_members.each do |shape| -%>
+        <%= shape.property_name %><% unless shape.is_required? %> = __<%= shape.property_name %>_found ? __<%= shape.property_name %> : <%= shape.default || "nil" %><% end %>,
+        <%- end -%>
+      )
+    end
+  <% end %>
   end
 end
 

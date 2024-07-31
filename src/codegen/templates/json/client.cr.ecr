@@ -11,11 +11,32 @@ module AWS::<%= module_name %>
     <%- operations.each do |operation_name, operation| %>
     def <%= operation_name.underscore %>(input : <%= operation.input_type %>) : <%= operation.return_type %>
       exec("<%= operation_name %>", input.to_json) do |response|
-        body = Log.level <= ::Log::Severity::Debug ? response.body_io.gets_to_end : response.body_io
+        body = (Log.level <= ::Log::Severity::Debug || !response.success?) ? response.body_io.gets_to_end : response.body_io
         Log.debug { "Operation \"<%= operation_name %>\" responded with:\n#{body}" }
-        return <%= operation.return_expression %>
+        return <%= operation.return_expression %> if response.success?
+
+        case get_error_model(response, body)
+        <%- operation.errors.try &.each do |error| -%>
+        when "<%= error %>" then raise <%= error %>.from_json(::JSON::PullParser.new(body))
+        <%- end -%>
+        else                     raise Error.from_json(::JSON::PullParser.new(body))
+        end
       end
     end
     <%- end -%>
+  end
+
+  class Error < Exception
+    def self.from_json(pull : ::JSON::PullParser)
+      pull.read_object do |key|
+        if key.in?({"message", "Message"})
+          return Error.new(String.new(pull))
+        else
+          pull.skip
+        end
+      end
+
+      Error.new
+    end
   end
 end

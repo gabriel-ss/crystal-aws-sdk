@@ -95,7 +95,7 @@ module AWS::Codegen::Render
   end
 
   class Operation
-    getter input_type : String, http_method, path_expression, body_expression, return_type, return_expression
+    getter input_type : String, http_method, path_expression, body_expression, return_type, return_expression, errors : Array(String)?
 
     def initialize(target : ServiceAPI::Target, shapes : Hash(String, ServiceAPI::Shape))
       operation = shapes[target.target].as(ServiceAPI::Shape::Operation)
@@ -110,6 +110,7 @@ module AWS::Codegen::Render
         !traits.http_payload? && traits.http_query_param.nil? && traits.http_header.nil?
       end
 
+      @errors = operation.errors.try(&.map { |error| Render.render_type(shapes, error) })
       @input_type = Render.render_type(shapes, operation.input)
       @http_method = operation.traits.http.try(&.method) || "POST"
 
@@ -148,13 +149,14 @@ module AWS::Codegen::Render
 
   class Structure
     getter module_name, shape_name : String, target : ServiceAPI::Shape::Structure, shape_members : Array(ShapeMember)
-    getter? has_query_params : Bool, has_header_params : Bool
+    getter? has_query_params : Bool, has_header_params : Bool, error : Bool
 
     def initialize(@module_name : String, @protocol : ServiceAPI::Shape::Service::Protocol, shape_id : String, shapes : Hash(String, ServiceAPI::Shape))
       @target = shapes[shape_id].as(ServiceAPI::Shape::Structure)
       @shape_name = Render.canonicalize_name shape_id
       @has_query_params = !target.members.all? { |member| member.[1].traits.try(&.http_query_param.nil?) || true }
       @has_header_params = !target.members.all? { |member| member.[1].traits.try(&.http_header.nil?) || true }
+      @error = !target.traits.try(&.error).nil?
       @shape_members = target.members
         .map { |member, shape| ShapeMember.new(module_name, member, shape, shapes) }
         .sort_by! { |shape_member| shape_member.is_required? ? -1 : 1 }
@@ -171,11 +173,12 @@ module AWS::Codegen::Render
   end
 
   class ShapeMember
-    getter name, rendered_type : String, property_name, converter : String?, http_query_param : String?, http_header : String?
+    getter name, rendered_type : String, property_name, converter : String?, http_query_param : String?, http_header : String?, default : String?
     getter? is_required : Bool, http_payload : Bool, http_uri_param : Bool, json_serializable : Bool
 
     def initialize(@module_name : String, @name : String, shape_ref : ServiceAPI::Target, shapes : Hash(String, ServiceAPI::Shape))
       @is_required = shape_ref.traits.try(&.required?) || false
+      @default = shape_ref.traits.try(&.default)
 
       @http_payload = shape_ref.traits.try(&.http_payload?) || false
       @http_uri_param = shape_ref.traits.try(&.http_uri_param?) || false
