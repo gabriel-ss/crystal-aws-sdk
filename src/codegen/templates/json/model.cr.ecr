@@ -1,8 +1,12 @@
 module AWS::<%= module_name %>
-  class <%= shape_name %>
+  class <%= shape_name %><% if error? %> < Error<% else %>
     include ::JSON::Serializable
-<% shape_members.each do |shape| %>
+    <% end -%>
+
+<%- shape_members.each do |shape| %>
+    <%- unless error? -%>
     @[::JSON::Field(key: "<%= shape.name %>"<%= ", ignore_serialize: true" if !shape.json_serializable? %><% unless shape.converter.nil? %>, converter: <%= shape.converter %><% end %>)]
+    <%- end -%>
     property <%= shape.property_name %> : <%= shape.rendered_type %><%= "?" unless shape.is_required? %>
 <% end %>
 
@@ -12,5 +16,53 @@ module AWS::<%= module_name %>
     <%- end -%>
     )
     end
+
+  <% if error? %>
+    def self.from_json(pull : ::JSON::PullParser)
+      <% shape_members.each do |shape| %>
+        __<%= shape.property_name %> = uninitialized ::Union(<%= shape.rendered_type %>)
+        __<%= shape.property_name %>_found = false
+      <% end %>
+
+        _location = pull.location
+        begin
+          pull.read_begin_object
+        rescue ex : ::JSON::ParseException
+          raise ::JSON::SerializableError.new(ex.message, self.class.to_s, nil, *_location, ex)
+        end
+
+        until pull.kind.end_object?
+          _key_location = pull.location
+          case pull.read_object_key
+          <% shape_members.each do |shape| %>
+            when "<%= shape.name %>"
+              begin
+                __<%= shape.property_name %> = <%- unless shape.converter.nil? -%>
+                    <%= shape.converter %>.from_json(pull)
+                  <%- else -%>
+                    ::Union(<%= shape.rendered_type %>).new(pull)
+                  <%- end -%>
+                __<%= shape.property_name %>_found = true
+              rescue ex : ::JSON::ParseException
+                raise ::JSON::SerializableError.new(ex.message, self.class.to_s, "<%= shape.name %>", *_key_location, ex)
+              end
+          <%- end %>
+          end
+        end
+        pull.read_next
+
+        <%- shape_members.each do |shape| -%>
+        <%- if shape.is_required? -%>
+        raise ::JSON::SerializableError.new("Missing JSON attribute: <%= shape.name %>", self.class.to_s, nil, *_location, nil) unless __<%= shape.property_name %>_found
+        <%- end -%>
+        <%- end -%>
+
+      <%= shape_name %>.new(
+        <%- shape_members.each do |shape| -%>
+        <%= shape.property_name %><% unless shape.is_required? %> = __<%= shape.property_name %>_found ? __<%= shape.property_name %> : <%= shape.default || "nil" %><% end %>,
+        <%- end -%>
+      )
+    end
+  <% end %>
   end
 end

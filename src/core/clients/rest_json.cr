@@ -23,5 +23,20 @@ private module AWS::RestJSONClient
 
     exec_with_client(request) { |response| yield response }
   end
+
+  private def get_error_model(response : HTTP::Client::Response, body : IO | String)
+    raw_name = response.headers["X-Amzn-Errortype"]?
+    if raw_name.nil?
+      pull = ::JSON::PullParser.new(body)
+      pull.read_object do |key|
+        if key.in?({"__type", "code"})
+          raw_name = String.new(pull)
+        else
+          pull.skip
+        end
+      end
+    end
+
+    /(?:^[^#\n]*#)?(.[^:\n]*)(?::.*$)?/.match!(raw_name.not_nil!)[1]
   end
 end
