@@ -18,9 +18,32 @@ module AWS::<%= module_name %>
         body = Log.level <= ::Log::Severity::Debug ? response.body_io.gets_to_end : response.body_io
         Log.debug { "Operation \"<%= operation_name %>\" responded with:\n#{body}" }
         reader = ::XML::Reader.new body
+
+        unless response.success?
+          reader.read
+          case reader.expand.xpath_string("string(/ErrorResponse/Error/Code)")
+          <%- (operation.errors || [] of String).each do |error| -%>
+          when "<%= error %>" then <%= error %>.from_xml(reader)
+          <%- end -%>
+          else raise Error.from_xml(reader)
+          end
+        end
+
         parse_response reader, <%= operation.return_type %>, "<%= operation.return_type.sub(/Response$/, "Result") %>"
       end
     end
     <%- end -%>
+  end
+
+  class Error < Exception
+    def self.from_xml(reader : ::XML::Reader)
+      while reader.read
+        if reader.node_type == ::XML::Reader::Type::ELEMENT && reader.name.in?({"Message", "message"})
+          return new(reader.read_inner_xml)
+        end
+      end
+
+      new
+    end
   end
 end

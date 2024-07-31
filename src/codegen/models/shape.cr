@@ -119,6 +119,14 @@ class AWS::Codegen::ServiceAPI::Shape
   end
 
   class Structure < Shape
+    class Traits
+      include JSON::Serializable
+
+      @[JSON::Field(key: "smithy.api#error")]
+      getter error : String?
+    end
+
+    getter traits : Traits?
     getter members : Hash(String, Target)
   end
 
